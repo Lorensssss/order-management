@@ -617,8 +617,8 @@ export default function OrderForm() {
               <button onClick={() => setActiveTab('items')} className={`px-6 py-3 font-medium text-sm rounded-t-lg border-t border-l border-r ml-2 ${activeTab === 'items' ? 'bg-white text-emerald-700 border-b-white translate-y-[1px]' : 'bg-gray-100 text-gray-500 border-transparent hover:text-gray-700'}`}>Order Items Sheet</button>
             </div>
             <div className="flex-1 overflow-auto p-6 bg-white">
-              {activeTab === 'orders' && (<div><div className="mb-4 text-sm text-gray-500">Showing data exactly as it will appear in the <strong>Orders</strong> file. <br/>Note: Particulars are now combined into one cell per order.</div><DataTable data={getExcelData.ordersSheetData} /></div>)}
-              {activeTab === 'items' && (<div><div className="mb-4 text-sm text-gray-500">Showing data exactly as it will appear in the <strong>Order Items</strong> file.</div><DataTable data={getExcelData.itemsSheetData} /></div>)}
+              {activeTab === 'orders' && (<div><div className="mb-4 text-sm text-gray-500"></div><DataTable data={getExcelData.ordersSheetData} /></div>)}
+              {activeTab === 'items' && (<div><div className="mb-4 text-sm text-gray-500"></div><DataTable data={getExcelData.itemsSheetData} /></div>)}
             </div>
             <div className="p-6 border-t bg-gray-50 flex justify-between items-center">
               <button onClick={clearAllOrders} className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-2"><Trash2 size={16} /> Clear All Data</button>
