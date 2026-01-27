@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Save, Download, Trash2, CheckCircle, Plus, X, FileSpreadsheet, Eye, RefreshCw } from 'lucide-react';
+import { Save, Download, Trash2, CheckCircle, Plus, X, FileSpreadsheet, Eye, RefreshCw, Calendar } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 // Helper function to generate random reference
@@ -10,6 +10,13 @@ function generateReference() {
     result += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return `MMP${new Date().getFullYear()}-${result}`;
+}
+
+// Helper to get current date in a clean text format "YYYY-MM-DD HH:mm:ss"
+function getCurrentTimestampString() {
+  const now = new Date();
+  const pad = (num) => String(num).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 }
 
 export default function OrderForm() {
@@ -24,6 +31,7 @@ export default function OrderForm() {
   const [activeTab, setActiveTab] = useState('orders');
 
   const [formData, setFormData] = useState({
+    created_at: getCurrentTimestampString(),
     updated_at: '',
     fk_user_id: '',
     fk_branch_id: '',
@@ -92,6 +100,15 @@ export default function OrderForm() {
     }));
   };
 
+  const handleDatePick = (e, fieldName) => {
+    const val = e.target.value; 
+    if (val) {
+      const formatted = val.replace('T', ' ') + ':00';
+      setFormData(prev => ({ ...prev, [fieldName]: formatted }));
+    }
+    e.target.value = '';
+  };
+
   const handleRegenerateReference = () => {
     setFormData(prev => ({ ...prev, order_reference: generateReference() }));
   };
@@ -154,16 +171,15 @@ export default function OrderForm() {
 
     setIsSaving(true);
 
-    const now = new Date().toISOString();
+    const creationTime = formData.created_at || new Date().toISOString();
     const orderId = nextId;
-    
     const managerIdValue = formData.fk_manager_user_id.trim() === '' ? null : formData.fk_manager_user_id;
 
     const newOrder = {
       ...formData,
       id: orderId,
-      created_at: now,
-      updated_at: formData.updated_at || now,
+      created_at: creationTime,
+      updated_at: formData.updated_at || creationTime,
       fk_manager_user_id: managerIdValue,
       manager_approved_at: formData.manager_approved_at || '',
       admin_approved_at: formData.admin_approved_at || '',
@@ -174,7 +190,7 @@ export default function OrderForm() {
       fk_org_id: parseInt(formData.fk_org_id) || 0,
       items: orderItems.map((item, idx) => ({
         id: idx + 1,
-        created_at: now,
+        created_at: creationTime,
         fk_order_id: orderId,
         fk_supply_id: item.fk_supply_id ? parseInt(item.fk_supply_id) : null,
         fk_supply_variation_id: parseInt(item.fk_supply_variation_id) || 0,
@@ -196,7 +212,9 @@ export default function OrderForm() {
     setNextId(newNextId);
     saveToLocalStorage(updatedOrders, newNextId);
 
+    // Reset Form
     setFormData({
+      created_at: getCurrentTimestampString(),
       updated_at: '',
       fk_user_id: '',
       fk_branch_id: '',
@@ -229,65 +247,48 @@ export default function OrderForm() {
   const formatDateForExcel = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
     return date.toLocaleString('en-US', {
       year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
     });
   };
 
-  // --- UPDATED EXCEL MAPPING ---
+  // --- MODIFIED EXCEL DATA LOGIC ---
   const getExcelData = useMemo(() => {
-    // 1. ORDERS SHEET: Now loops through ITEMS to create rows (Denormalized)
-    // If an order has 2 items, this creates 2 rows in the Orders sheet with distinct particulars
-    const ordersSheetData = [];
-    
-    orders.forEach(order => {
-      // If order has items, create a row for EACH item
-      if (order.items && order.items.length > 0) {
-        order.items.forEach(item => {
-          ordersSheetData.push({
-            'id': String(order.id),
-            'created_at': formatDateForExcel(order.created_at),
-            'updated_at': formatDateForExcel(order.updated_at),
-            'particulars': item.particulars || '', // <--- The specific Item Particular
-            'fk_user_id': order.fk_user_id || '',
-            'fk_branch_id': String(order.fk_branch_id),
-            'order_reference': order.order_reference,
-            'status': order.status,
-            'total_amount': parseFloat(order.total_amount).toFixed(2),
-            'manager_approved_at': formatDateForExcel(order.manager_approved_at),
-            'admin_approved_at': formatDateForExcel(order.admin_approved_at),
-            'rejection_reason': order.rejection_reason || '',
-            'read_status': order.read_status ? 'TRUE' : 'FALSE',
-            'is_deleted': order.is_deleted ? 'TRUE' : 'FALSE',
-            'fk_manager_user_id': order.fk_manager_user_id === null ? '' : order.fk_manager_user_id,
-            'fk_org_id': String(order.fk_org_id)
-          });
-        });
-      } else {
-        // Fallback for orders with no items (unlikely but safe to have)
-        ordersSheetData.push({
-          'id': String(order.id),
-          'created_at': formatDateForExcel(order.created_at),
-          'updated_at': formatDateForExcel(order.updated_at),
-          'particulars': '', 
-          'fk_user_id': order.fk_user_id || '',
-          'fk_branch_id': String(order.fk_branch_id),
-          'order_reference': order.order_reference,
-          'status': order.status,
-          'total_amount': parseFloat(order.total_amount).toFixed(2),
-          'manager_approved_at': formatDateForExcel(order.manager_approved_at),
-          'admin_approved_at': formatDateForExcel(order.admin_approved_at),
-          'rejection_reason': order.rejection_reason || '',
-          'read_status': order.read_status ? 'TRUE' : 'FALSE',
-          'is_deleted': order.is_deleted ? 'TRUE' : 'FALSE',
-          'fk_manager_user_id': order.fk_manager_user_id === null ? '' : order.fk_manager_user_id,
-          'fk_org_id': String(order.fk_org_id)
-        });
-      }
+    // 1. ORDERS SHEET: One row per order, with consolidated particulars
+    const ordersSheetData = orders.map(order => {
+      
+      const consolidatedParticulars = order.items && order.items.length > 0 
+        ? order.items.map(item => {
+            const partName = item.particulars || 'No Particulars';
+            const qty = item.quantity || 0;
+            const price = parseFloat(item.unit_price_snapshot || 0).toFixed(0); 
+            return `${partName}(${qty} x ${price})`;
+          }).join(', ')
+        : '';
+
+      return {
+        'id': String(order.id),
+        'created_at': formatDateForExcel(order.created_at),
+        'updated_at': formatDateForExcel(order.updated_at),
+        'fk_user_id': order.fk_user_id || '',
+        'fk_branch_id': String(order.fk_branch_id),
+        'order_reference': order.order_reference,
+        'status': order.status,
+        'total_amount': parseFloat(order.total_amount).toFixed(2),
+        'particulars': consolidatedParticulars, 
+        'manager_approved_at': formatDateForExcel(order.manager_approved_at),
+        'admin_approved_at': formatDateForExcel(order.admin_approved_at),
+        'rejection_reason': order.rejection_reason || '',
+        'read_status': order.read_status ? 'TRUE' : 'FALSE',
+        'is_deleted': order.is_deleted ? 'TRUE' : 'FALSE',
+        'fk_manager_user_id': order.fk_manager_user_id === null ? '' : order.fk_manager_user_id,
+        'fk_org_id': String(order.fk_org_id)
+      };
     });
 
-    // 2. ITEMS SHEET: Standard 1 row per item
+    // 2. ITEMS SHEET: Removed Particulars
     const itemsSheetData = [];
     orders.forEach(order => {
       if (order.items && order.items.length > 0) {
@@ -297,7 +298,7 @@ export default function OrderForm() {
             'fk_supply_id': item.fk_supply_id ? String(item.fk_supply_id) : '',
             'fk_supply_variation_id': String(item.fk_supply_variation_id),
             'fk_selling_variation_id': String(item.fk_selling_variation_id),
-            'particulars': item.particulars || '', 
+            // 'particulars' removed from here
             'quantity': item.quantity ? parseInt(item.quantity) : 0,
             'stock_consumption_snapshot': parseFloat(item.stock_consumption_snapshot).toFixed(2),
             'unit_price_snapshot': parseFloat(item.unit_price_snapshot).toFixed(2),
@@ -321,19 +322,18 @@ export default function OrderForm() {
       return;
     }
 
-    // 1. Generate Orders File
     const wbOrders = XLSX.utils.book_new();
     const wsOrders = XLSX.utils.json_to_sheet(ordersSheetData);
-    // Adjusted column widths to account for 'particulars' being the 4th column now
-    wsOrders['!cols'] = [{ wch: 8 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 38 }, { wch: 15 }, { wch: 20 }, { wch: 18 }, { wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 40 }, { wch: 12 }];
+    
+    const colWidths = [{ wch: 10 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 10 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 50 }]; 
+    wsOrders['!cols'] = colWidths;
+
     XLSX.utils.book_append_sheet(wbOrders, wsOrders, 'Orders');
     XLSX.writeFile(wbOrders, `Orders_Export_${dateStr}.xlsx`);
 
-    // 2. Generate Order Items File
     if (itemsSheetData.length > 0) {
       const wbItems = XLSX.utils.book_new();
       const wsItems = XLSX.utils.json_to_sheet(itemsSheetData);
-      wsItems['!cols'] = [{ wch: 15 }, { wch: 15 }, { wch: 22 }, { wch: 22 }, { wch: 30 }, { wch: 12 }, { wch: 25 }, { wch: 20 }, { wch: 18 }, { wch: 20 }, { wch: 20 }];
       XLSX.utils.book_append_sheet(wbItems, wsItems, 'Order Items');
       XLSX.writeFile(wbItems, `Order_Items_Export_${dateStr}.xlsx`);
     }
@@ -398,25 +398,36 @@ export default function OrderForm() {
               <h2 className="text-xl font-semibold text-gray-800 mb-4">Order Information</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
-                {/* Reference Field */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">order_reference <span className="text-xs text-gray-400">(Auto)</span></label>
                   <div className="flex gap-2">
+                    <input type="text" name="order_reference" value={formData.order_reference} readOnly className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 font-semibold focus:outline-none cursor-not-allowed" />
+                    <button type="button" onClick={handleRegenerateReference} className="px-3 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-600 transition" title="Generate new ID"><RefreshCw size={18} /></button>
+                  </div>
+                </div>
+
+                {/* CREATED_AT WITH FIXED PICKER */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">created_at</label>
+                  <div className="relative flex items-center">
                     <input 
-                        type="text" 
-                        name="order_reference" 
-                        value={formData.order_reference} 
-                        readOnly
-                        className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 font-semibold focus:outline-none cursor-not-allowed" 
+                      type="text" 
+                      name="created_at" 
+                      value={formData.created_at} 
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent pr-12" 
+                      placeholder="YYYY-MM-DD HH:mm:ss"
                     />
-                    <button 
-                        type="button" 
-                        onClick={handleRegenerateReference} 
-                        className="px-3 bg-gray-200 hover:bg-gray-300 rounded-lg text-gray-600 transition" 
-                        title="Generate new ID"
-                    >
-                        <RefreshCw size={18} />
-                    </button>
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8">
+                       <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
+                          <Calendar size={18} />
+                          <input 
+                            type="datetime-local" 
+                            onChange={(e) => handleDatePick(e, 'created_at')} 
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          />
+                       </div>
+                    </div>
                   </div>
                 </div>
 
@@ -445,19 +456,82 @@ export default function OrderForm() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">fk_manager_user_id (Optional)</label>
                   <input type="text" name="fk_manager_user_id" value={formData.fk_manager_user_id} onChange={handleInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" placeholder="UUID or leave empty for NULL" />
                 </div>
+                
+                {/* UPDATED_AT WITH FIXED PICKER */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">updated_at (Optional)</label>
-                  <input type="datetime-local" name="updated_at" value={formData.updated_at} onChange={handleInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
-                  <p className="text-xs text-gray-500 mt-1">Leave blank to use current time</p>
+                  <div className="relative flex items-center">
+                    <input 
+                      type="text" 
+                      name="updated_at" 
+                      value={formData.updated_at} 
+                      onChange={handleInputChange} 
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent pr-12" 
+                      placeholder="YYYY-MM-DD HH:mm:ss"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8">
+                       <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
+                          <Calendar size={18} />
+                          <input 
+                            type="datetime-local" 
+                            onChange={(e) => handleDatePick(e, 'updated_at')} 
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          />
+                       </div>
+                    </div>
+                  </div>
                 </div>
+                
+                {/* MANAGER_APPROVED_AT WITH FIXED PICKER */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">manager_approved_at (Optional)</label>
-                  <input type="datetime-local" name="manager_approved_at" value={formData.manager_approved_at} onChange={handleInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                  <div className="relative flex items-center">
+                    <input 
+                      type="text" 
+                      name="manager_approved_at" 
+                      value={formData.manager_approved_at} 
+                      onChange={handleInputChange} 
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent pr-12" 
+                      placeholder="YYYY-MM-DD HH:mm:ss"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8">
+                       <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
+                          <Calendar size={18} />
+                          <input 
+                            type="datetime-local" 
+                            onChange={(e) => handleDatePick(e, 'manager_approved_at')} 
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          />
+                       </div>
+                    </div>
+                  </div>
                 </div>
+                
+                {/* ADMIN_APPROVED_AT WITH FIXED PICKER */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">admin_approved_at (Optional)</label>
-                  <input type="datetime-local" name="admin_approved_at" value={formData.admin_approved_at} onChange={handleInputChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent" />
+                  <div className="relative flex items-center">
+                    <input 
+                      type="text" 
+                      name="admin_approved_at" 
+                      value={formData.admin_approved_at} 
+                      onChange={handleInputChange} 
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent pr-12" 
+                      placeholder="YYYY-MM-DD HH:mm:ss"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8">
+                       <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
+                          <Calendar size={18} />
+                          <input 
+                            type="datetime-local" 
+                            onChange={(e) => handleDatePick(e, 'admin_approved_at')} 
+                            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          />
+                       </div>
+                    </div>
+                  </div>
                 </div>
+                
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">total_amount (Auto-calculated)</label>
                   <input type="text" value={`₱${formData.total_amount}`} disabled className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-700 font-semibold" />
@@ -480,13 +554,10 @@ export default function OrderForm() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      
-                      {/* PARTICULARS FIELD INSIDE ITEM */}
                       <div className="md:col-span-3">
                         <label className="block text-xs font-medium text-gray-600 mb-1">particulars</label>
                         <input type="text" value={item.particulars} onChange={(e) => handleItemChange(index, 'particulars', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500" placeholder="Specific details for this item..." />
                       </div>
-
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">fk_supply_id</label>
                         <input type="number" value={item.fk_supply_id} onChange={(e) => handleItemChange(index, 'fk_supply_id', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500" placeholder="Supply ID" />
@@ -499,7 +570,6 @@ export default function OrderForm() {
                         <label className="block text-xs font-medium text-gray-600 mb-1">fk_selling_variation_id *</label>
                         <input type="number" value={item.fk_selling_variation_id} onChange={(e) => handleItemChange(index, 'fk_selling_variation_id', e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500" placeholder="Selling Var ID" />
                       </div>
-                      
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">quantity *</label>
                         <input type="number" value={item.quantity} onChange={(e) => handleItemChange(index, 'quantity', e.target.value)} required step="0.01" min="0" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500" placeholder="0" />
@@ -508,12 +578,10 @@ export default function OrderForm() {
                         <label className="block text-xs font-medium text-gray-600 mb-1">unit_price_snapshot *</label>
                         <input type="number" value={item.unit_price_snapshot} onChange={(e) => handleItemChange(index, 'unit_price_snapshot', e.target.value)} required step="0.01" min="0" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500" placeholder="0.00" />
                       </div>
-                      
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">subtotal_amount</label>
                         <input type="text" value={`₱${item.subtotal_amount}`} disabled className="w-full px-3 py-2 bg-emerald-50 border border-emerald-300 rounded-lg text-sm font-semibold text-emerald-700" />
                       </div>
-                      
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">stock_consumption_snapshot *</label>
                         <input type="number" value={item.stock_consumption_snapshot} onChange={(e) => handleItemChange(index, 'stock_consumption_snapshot', e.target.value)} required step="0.01" min="0" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500" placeholder="0" />
@@ -522,7 +590,6 @@ export default function OrderForm() {
                         <label className="block text-xs font-medium text-gray-600 mb-1">actual_released_qty</label>
                         <input type="number" value={item.actual_released_qty} onChange={(e) => handleItemChange(index, 'actual_released_qty', e.target.value)} step="0.01" min="0" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500" placeholder="0" />
                       </div>
-                      
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">final_price_released (Auto)</label>
                         <input type="text" value={`₱${item.final_price_released}`} disabled className="w-full px-3 py-2 bg-emerald-50 border border-emerald-300 rounded-lg text-sm font-semibold text-emerald-700" />
@@ -550,7 +617,7 @@ export default function OrderForm() {
               <button onClick={() => setActiveTab('items')} className={`px-6 py-3 font-medium text-sm rounded-t-lg border-t border-l border-r ml-2 ${activeTab === 'items' ? 'bg-white text-emerald-700 border-b-white translate-y-[1px]' : 'bg-gray-100 text-gray-500 border-transparent hover:text-gray-700'}`}>Order Items Sheet</button>
             </div>
             <div className="flex-1 overflow-auto p-6 bg-white">
-              {activeTab === 'orders' && (<div><div className="mb-4 text-sm text-gray-500">Showing data exactly as it will appear in the <strong>Orders</strong> file. <br/>Note: If an order has multiple items, it appears multiple times here to show specific 'particulars'.</div><DataTable data={getExcelData.ordersSheetData} /></div>)}
+              {activeTab === 'orders' && (<div><div className="mb-4 text-sm text-gray-500">Showing data exactly as it will appear in the <strong>Orders</strong> file. <br/>Note: Particulars are now combined into one cell per order.</div><DataTable data={getExcelData.ordersSheetData} /></div>)}
               {activeTab === 'items' && (<div><div className="mb-4 text-sm text-gray-500">Showing data exactly as it will appear in the <strong>Order Items</strong> file.</div><DataTable data={getExcelData.itemsSheetData} /></div>)}
             </div>
             <div className="p-6 border-t bg-gray-50 flex justify-between items-center">
