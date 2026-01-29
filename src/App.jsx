@@ -139,8 +139,9 @@ export default function OrderForm() {
     setFormData(prev => ({ ...prev, total_amount: total.toFixed(2) }));
   };
 
+  // --- CHANGED: This now adds the new item to the BEGINNING of the array ---
   const addOrderItem = () => {
-    setOrderItems([...orderItems, {
+    setOrderItems([{
       fk_supply_id: '',
       fk_supply_variation_id: '',
       fk_selling_variation_id: '',
@@ -151,7 +152,7 @@ export default function OrderForm() {
       actual_released_qty: '',
       final_price_released: 0,
       particulars: ''
-    }]);
+    }, ...orderItems]);
   };
 
   const removeOrderItem = (index) => {
@@ -205,7 +206,8 @@ export default function OrderForm() {
       }))
     };
 
-    const updatedOrders = [...orders, newOrder];
+    // Also adding the new ORDER to the top of the saved list
+    const updatedOrders = [newOrder, ...orders];
     const newNextId = nextId + 1;
     
     setOrders(updatedOrders);
@@ -419,14 +421,14 @@ export default function OrderForm() {
                       placeholder="YYYY-MM-DD HH:mm:ss"
                     />
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8">
-                       <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
+                        <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
                           <Calendar size={18} />
                           <input 
                             type="datetime-local" 
                             onChange={(e) => handleDatePick(e, 'created_at')} 
                             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                           />
-                       </div>
+                        </div>
                     </div>
                   </div>
                 </div>
@@ -470,14 +472,14 @@ export default function OrderForm() {
                       placeholder="YYYY-MM-DD HH:mm:ss"
                     />
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8">
-                       <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
+                        <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
                           <Calendar size={18} />
                           <input 
                             type="datetime-local" 
                             onChange={(e) => handleDatePick(e, 'updated_at')} 
                             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                           />
-                       </div>
+                        </div>
                     </div>
                   </div>
                 </div>
@@ -495,14 +497,14 @@ export default function OrderForm() {
                       placeholder="YYYY-MM-DD HH:mm:ss"
                     />
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8">
-                       <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
+                        <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
                           <Calendar size={18} />
                           <input 
                             type="datetime-local" 
                             onChange={(e) => handleDatePick(e, 'manager_approved_at')} 
                             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                           />
-                       </div>
+                        </div>
                     </div>
                   </div>
                 </div>
@@ -520,14 +522,14 @@ export default function OrderForm() {
                       placeholder="YYYY-MM-DD HH:mm:ss"
                     />
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8">
-                       <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
+                        <div className="relative w-full h-full flex items-center justify-center hover:bg-gray-100 rounded cursor-pointer text-gray-500">
                           <Calendar size={18} />
                           <input 
                             type="datetime-local" 
                             onChange={(e) => handleDatePick(e, 'admin_approved_at')} 
                             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                           />
-                       </div>
+                        </div>
                     </div>
                   </div>
                 </div>
@@ -620,12 +622,9 @@ export default function OrderForm() {
               {activeTab === 'orders' && (<div><div className="mb-4 text-sm text-gray-500"></div><DataTable data={getExcelData.ordersSheetData} /></div>)}
               {activeTab === 'items' && (<div><div className="mb-4 text-sm text-gray-500"></div><DataTable data={getExcelData.itemsSheetData} /></div>)}
             </div>
-            <div className="p-6 border-t bg-gray-50 flex justify-between items-center">
-              <button onClick={clearAllOrders} className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-2"><Trash2 size={16} /> Clear All Data</button>
-              <div className="flex gap-3">
-                <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100">Close</button>
-                <button onClick={exportToExcel} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"><Download size={18} /> Export 2 Files</button>
-              </div>
+            <div className="p-6 border-t bg-gray-50 flex items-center justify-between">
+              <button onClick={clearAllOrders} className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-2"><Trash2 size={18} /> Clear All Data</button>
+              <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition shadow-md"><Download size={20} /> Download Excel</button>
             </div>
           </div>
         </div>
