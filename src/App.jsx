@@ -22,7 +22,7 @@ function getCurrentTimestampString() {
 export default function OrderForm() {
   // --- CONFIGURATION: SET YOUR ID RANGE HERE ---
   const START_ID = 1000; 
-  const END_ID = 5000;   
+  const END_ID = 10000;   
   // ---------------------------------------------
 
   const [orders, setOrders] = useState([]);
