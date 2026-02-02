@@ -89,7 +89,10 @@ export default function OrderForm() {
 
   const saveToLocalStorage = (data, newNextId) => {
     localStorage.setItem('completed_orders', JSON.stringify(data));
-    localStorage.setItem('next_order_id', newNextId.toString());
+    // Only update ID in storage if provided
+    if (newNextId) {
+        localStorage.setItem('next_order_id', newNextId.toString());
+    }
   };
 
   const handleInputChange = (e) => {
@@ -139,7 +142,6 @@ export default function OrderForm() {
     setFormData(prev => ({ ...prev, total_amount: total.toFixed(2) }));
   };
 
-  // --- CHANGED: This now adds the new item to the BEGINNING of the array ---
   const addOrderItem = () => {
     setOrderItems([{
       fk_supply_id: '',
@@ -206,7 +208,6 @@ export default function OrderForm() {
       }))
     };
 
-    // Also adding the new ORDER to the top of the saved list
     const updatedOrders = [newOrder, ...orders];
     const newNextId = nextId + 1;
     
@@ -246,6 +247,17 @@ export default function OrderForm() {
     alert('✓ Order saved successfully!');
   };
 
+  // --- NEW: Function to delete a specific order ---
+  const handleDeleteOrder = (orderId) => {
+    if (window.confirm(`Are you sure you want to delete Order ID ${orderId}?`)) {
+        // Filter out the order with the matching ID
+        const updatedOrders = orders.filter(o => o.id !== parseInt(orderId));
+        setOrders(updatedOrders);
+        // Save to local storage (pass null as 2nd arg to keep current Next ID)
+        saveToLocalStorage(updatedOrders, null);
+    }
+  };
+
   const formatDateForExcel = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -256,11 +268,8 @@ export default function OrderForm() {
     });
   };
 
-  // --- MODIFIED EXCEL DATA LOGIC ---
   const getExcelData = useMemo(() => {
-    // 1. ORDERS SHEET: One row per order, with consolidated particulars
     const ordersSheetData = orders.map(order => {
-      
       const consolidatedParticulars = order.items && order.items.length > 0 
         ? order.items.map(item => {
             const partName = item.particulars || 'No Particulars';
@@ -290,7 +299,6 @@ export default function OrderForm() {
       };
     });
 
-    // 2. ITEMS SHEET: Removed Particulars
     const itemsSheetData = [];
     orders.forEach(order => {
       if (order.items && order.items.length > 0) {
@@ -300,7 +308,6 @@ export default function OrderForm() {
             'fk_supply_id': item.fk_supply_id ? String(item.fk_supply_id) : '',
             'fk_supply_variation_id': String(item.fk_supply_variation_id),
             'fk_selling_variation_id': String(item.fk_selling_variation_id),
-            // 'particulars' removed from here
             'quantity': item.quantity ? parseInt(item.quantity) : 0,
             'stock_consumption_snapshot': parseFloat(item.stock_consumption_snapshot).toFixed(2),
             'unit_price_snapshot': parseFloat(item.unit_price_snapshot).toFixed(2),
@@ -350,17 +357,38 @@ export default function OrderForm() {
     }
   };
 
-  const DataTable = ({ data }) => {
+  // --- MODIFIED: DataTable now accepts onDelete and idField ---
+  const DataTable = ({ data, onDelete, idField = 'id' }) => {
     if (!data || data.length === 0) return <div className="p-8 text-center text-gray-500">No data available</div>;
     const headers = Object.keys(data[0]);
     return (
       <div className="overflow-x-auto border rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
-            <tr>{headers.map((header) => (<th key={header} className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{header}</th>))}</tr>
+            <tr>
+               {/* Add extra header column if onDelete is present */}
+               {onDelete && <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">Action</th>}
+               {headers.map((header) => (<th key={header} className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{header}</th>))}
+            </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {data.map((row, idx) => (<tr key={idx} className="hover:bg-gray-50">{headers.map((header) => (<td key={`${idx}-${header}`} className="px-3 py-2 text-sm text-gray-700 whitespace-nowrap">{row[header]}</td>))}</tr>))}
+            {data.map((row, idx) => (
+                <tr key={idx} className="hover:bg-gray-50 group">
+                    {/* Add Delete Button Cell if onDelete is present */}
+                    {onDelete && (
+                        <td className="px-3 py-2 whitespace-nowrap">
+                            <button 
+                                onClick={() => onDelete(row[idField])}
+                                className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition"
+                                title="Delete Row"
+                            >
+                                <X size={16} />
+                            </button>
+                        </td>
+                    )}
+                    {headers.map((header) => (<td key={`${idx}-${header}`} className="px-3 py-2 text-sm text-gray-700 whitespace-nowrap">{row[header]}</td>))}
+                </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -619,12 +647,33 @@ export default function OrderForm() {
               <button onClick={() => setActiveTab('items')} className={`px-6 py-3 font-medium text-sm rounded-t-lg border-t border-l border-r ml-2 ${activeTab === 'items' ? 'bg-white text-emerald-700 border-b-white translate-y-[1px]' : 'bg-gray-100 text-gray-500 border-transparent hover:text-gray-700'}`}>Order Items Sheet</button>
             </div>
             <div className="flex-1 overflow-auto p-6 bg-white">
-              {activeTab === 'orders' && (<div><div className="mb-4 text-sm text-gray-500"></div><DataTable data={getExcelData.ordersSheetData} /></div>)}
-              {activeTab === 'items' && (<div><div className="mb-4 text-sm text-gray-500"></div><DataTable data={getExcelData.itemsSheetData} /></div>)}
+              {activeTab === 'orders' && (
+                <div>
+                  <div className="mb-4 flex justify-between items-center">
+                    <p className="text-sm text-gray-500">Preview of <strong>Orders</strong> worksheet.</p>
+                    <button onClick={clearAllOrders} className="text-red-600 hover:text-red-700 text-sm font-medium flex items-center gap-1"><Trash2 size={16} /> Clear All</button>
+                  </div>
+                  {/* PASSED handleDeleteOrder and idField HERE */}
+                  <DataTable 
+                    data={getExcelData.ordersSheetData} 
+                    onDelete={handleDeleteOrder} 
+                    idField="id" 
+                  />
+                </div>
+              )}
+              
+              {activeTab === 'items' && (
+                <div>
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-500">Preview of <strong>Order Items</strong> worksheet (Read-only view).</p>
+                  </div>
+                  <DataTable data={getExcelData.itemsSheetData} />
+                </div>
+              )}
             </div>
-            <div className="p-6 border-t bg-gray-50 flex items-center justify-between">
-              <button onClick={clearAllOrders} className="text-red-600 hover:text-red-800 text-sm font-medium flex items-center gap-2"><Trash2 size={18} /> Clear All Data</button>
-              <button onClick={exportToExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition shadow-md"><Download size={20} /> Download Excel</button>
+            <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+              <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded-lg transition">Close</button>
+              <button onClick={exportToExcel} className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition flex items-center gap-2 shadow-sm"><Download size={18} /> Export to Excel</button>
             </div>
           </div>
         </div>
